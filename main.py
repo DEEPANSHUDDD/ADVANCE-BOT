@@ -9,9 +9,9 @@ from threading import Thread
 app = Flask(__name__)
 
 # Your bot token and API credentials
-BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
-API_ID = 'YOUR_API_ID'
-API_HASH = 'YOUR_API_HASH'
+BOT_TOKEN = '6713372559:AAFrYDflkbxCBjW0KLnXOFuwL48EHGehwAo'
+API_ID = '7048752'
+API_HASH = '4d81d01ce78778b03dc6d13ee19ec3ea'
 
 bot = Bot(token=BOT_TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
