@@ -1,3 +1,6 @@
 Flask
-python-telegram-bot
+python-telegram-bot==13.11
 gunicorn
+telethon
+python-dotenv
+openai
