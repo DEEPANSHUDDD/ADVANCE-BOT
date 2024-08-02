@@ -1,10 +1,12 @@
 import os
 import subprocess
+import logging
 from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, Dispatcher, Filters, MessageHandler, Updater
 from flask import Flask, request
 from threading import Thread
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 from dotenv import load_dotenv
 import openai
 
@@ -30,21 +32,25 @@ if not OWNER_ID:
 if not API_ID or not API_HASH:
     raise ValueError("API_ID and API_HASH must be set for Telethon.")
 
+if not OPENAI_API_KEY:
+    raise ValueError("No OPENAI_API_KEY provided. Please set the OPENAI_API_KEY environment variable.")
+
+openai.api_key = OPENAI_API_KEY
+
 bot = Bot(token=BOT_TOKEN)
 updater = Updater(token=BOT_TOKEN, use_context=True)
 dispatcher = updater.dispatcher
 
 # Initialize the Telethon client
-telethon_client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+telethon_client = TelegramClient(StringSession(), API_ID, API_HASH)
 
 # Store user sessions and predefined commands
 user_sessions = {}
 predefined_commands = {
     'update_bot': 'git pull origin main',
-    'restart_bot': 'sudo systemctl restart bot_service',
+    'restart_bot': 'sudo systemctl restart telegram_bot.service',
     'run_script': 'sh /path/to/your/script.sh',
     'check_disk': 'df -h'
-    # Add other predefined commands here
 }
 
 def start(update, context):
@@ -187,10 +193,11 @@ async def send_telethon_message(message):
 
 def ai_command(update, context):
     user_id = update.message.from_user.id
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {}
     if 'openai_api_key' not in user_sessions[user_id]:
-        update.message.reply_text('Please set your OpenAI API key first using /setopenai <api_key> command.')
-        return
-    
+        user_sessions[user_id]['openai_api_key'] = OPENAI_API_KEY
+
     openai.api_key = user_sessions[user_id]['openai_api_key']
     user_request = ' '.join(context.args)
     
@@ -204,12 +211,11 @@ def ai_command(update, context):
         image_url = response['data'][0]['url']
         update.message.reply_text(f'Here is the generated image: {image_url}')
     else:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=user_request,
-            max_tokens=150
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": user_request}]
         )
-        text = response.choices[0].text.strip()
+        text = response.choices[0].message['content'].strip()
         update.message.reply_text(f'AI Response: {text}')
 
 def set_openai(update, context):
@@ -272,7 +278,7 @@ def webhook():
 
 if __name__ == '__main__':
     # Start the Flask app in a separate thread
-    Thread(target=app.run, kwargs={'port': int(os.environ.get('PORT', 5000))}).start()
+    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': int(os.environ.get('PORT', 5000))}).start()
     
     # Start the Telegram bot
     updater.start_polling()
