@@ -68,7 +68,7 @@ def button(update, context):
     if query.data == 'deploy':
         context.bot.send_message(chat_id=query.message.chat_id, text="You selected Heroku Deployment. Use /help to see available commands.")
     elif query.data == 'run_telethon_script':
-        context.bot.send_message(chat_id=query.message.chat_id, text="You selected to run a Telethon script. Use /runtelethon to run the script.")
+        context.bot.send_message(chat_id=query.message.chat_id, text="You selected to run a Telethon script. Use 'dk ai' followed by your request to run the script.")
     elif query.data == 'ai':
         context.bot.send_message(chat_id=query.message.chat_id, text="You selected AI. Use 'dk ai' followed by your request to interact with AI.")
 
@@ -80,7 +80,6 @@ def help_command(update, context):
                               '/status - Check the status of the latest deployment\n'
                               '/logs - Retrieve logs from Heroku\n'
                               '/exec <command> - Execute a predefined command\n'
-                              '/runtelethon - Run a custom Telethon script\n'
                               '/setopenai <api_key> - Set the OpenAI API key')
 
 def set_heroku(update, context):
@@ -228,34 +227,12 @@ def set_openai(update, context):
     user_sessions[user_id]['openai_api_key'] = openai_api_key
     update.message.reply_text('OpenAI API key set.')
 
-def handle_group_message(update, context):
-    user_id = update.message.from_user.id
+def handle_message(update, context):
     if 'dk ai' in update.message.text.lower():
         handle_ai_request(update, context)
     else:
-        message_text = update.message.text
-        if message_text.startswith('/'):
-            command = message_text.split(' ')[0]
-            if command == '/start':
-                start(update, context)
-            elif command == '/help':
-                help_command(update, context)
-            elif command == '/setheroku':
-                set_heroku(update, context)
-            elif command == '/setappname':
-                set_app_name(update, context)
-            elif command == '/deploy':
-                deploy(update, context)
-            elif command == '/status':
-                check_status(update, context)
-            elif command == '/logs':
-                get_logs(update, context)
-            elif command == '/exec':
-                exec_command(update, context)
-            elif command == '/runtelethon':
-                run_telethon_script(update, context)
-            elif command == '/setopenai':
-                set_openai(update, context)
+        # Process other commands here if necessary
+        pass
 
 # Add handlers to the dispatcher
 dispatcher.add_handler(CommandHandler("start", start))
@@ -270,8 +247,8 @@ dispatcher.add_handler(CommandHandler("runtelethon", run_telethon_script, pass_a
 dispatcher.add_handler(CommandHandler("setopenai", set_openai, pass_args=True))
 dispatcher.add_handler(CallbackQueryHandler(button))
 
-# Add a message handler to handle commands in groups
-dispatcher.add_handler(MessageHandler(Filters.text & Filters.chat_type.groups, handle_group_message))
+# Add a message handler to handle commands in groups and private chats
+dispatcher.add_handler(MessageHandler(Filters.text & (Filters.chat_type.groups | Filters.chat_type.private), handle_message))
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -286,3 +263,4 @@ if __name__ == '__main__':
     # Start the Telegram bot
     updater.start_polling()
     updater.idle()
+
