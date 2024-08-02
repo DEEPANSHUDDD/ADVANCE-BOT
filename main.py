@@ -215,7 +215,7 @@ def ai_command(update, context):
                 model="gpt-4",
                 messages=[{"role": "user", "content": user_request}]
             )
-            text = response['choices'][0]['message']['content'].strip()
+            text = response.choices[0].message['content'].strip()
             update.message.reply_text(f'AI Response: {text}')
     except Exception as e:
         update.message.reply_text(f'Error: {str(e)}')
@@ -274,7 +274,7 @@ dispatcher.add_handler(CommandHandler("setopenai", set_openai, pass_args=True))
 dispatcher.add_handler(CallbackQueryHandler(button))
 
 # Add a message handler to handle commands in groups
-dispatcher.add_handler(MessageHandler(Filters.text & Filters.group, handle_group_message))
+dispatcher.add_handler(MessageHandler(Filters.text & Filters.chat_type.groups, handle_group_message))
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
