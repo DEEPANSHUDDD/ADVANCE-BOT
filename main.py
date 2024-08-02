@@ -8,7 +8,6 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
 import openai
-import subprocess
 
 # Load environment variables from .env file
 load_dotenv()
@@ -263,4 +262,5 @@ if __name__ == '__main__':
     # Start the Telegram bot
     updater.start_polling()
     updater.idle()
+
 
