@@ -1,203 +1,213 @@
+
 import os
-import logging
-from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CommandHandler, CallbackQueryHandler, Dispatcher, Filters, MessageHandler, Updater
-from flask import Flask, request
-from threading import Thread
-from telethon import TelegramClient, events
-from telethon.sessions import StringSession
-from dotenv import load_dotenv
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import openai
+from dotenv import load_dotenv
+import subprocess
 
 # Load environment variables from .env file
 load_dotenv()
 
-app = Flask(__name__)
-
-# Access the bot token, owner ID, and Telethon API credentials from environment variables
-BOT_TOKEN = os.getenv('TOKEN')
-OWNER_ID = os.getenv('OWNER_ID')
-API_ID = os.getenv('API_ID')
+# Access the bot token, OpenAI API key, and other credentials from environment variables
+API_ID = int(os.getenv('API_ID'))
 API_HASH = os.getenv('API_HASH')
-SESSION_NAME = 'my_telegram_session'
+BOT_TOKEN = os.getenv('TOKEN')
+OWNER_ID = int(os.getenv('OWNER_ID'))
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 if not BOT_TOKEN:
-    raise ValueError("No TOKEN provided. Please set the TOKEN environment variable.")
-
+    raise ValueError("No BOT_TOKEN provided. Please set the BOT_TOKEN environment variable.")
 if not OWNER_ID:
     raise ValueError("No OWNER_ID provided. Please set the OWNER_ID environment variable.")
-
 if not API_ID or not API_HASH:
-    raise ValueError("API_ID and API_HASH must be set for Telethon.")
-
+    raise ValueError("API_ID and API_HASH must be set for Pyrogram.")
 if not OPENAI_API_KEY:
     raise ValueError("No OPENAI_API_KEY provided. Please set the OPENAI_API_KEY environment variable.")
 
 openai.api_key = OPENAI_API_KEY
 
-bot = Bot(token=BOT_TOKEN)
-updater = Updater(token=BOT_TOKEN, use_context=True)
-dispatcher = updater.dispatcher
+app = Client("my_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Initialize the Telethon client
-telethon_client = TelegramClient(StringSession(), API_ID, API_HASH)
-
-# Store user sessions and predefined commands
 user_sessions = {}
-predefined_commands = {
-    'update_bot': 'git pull origin main',
-    'restart_bot': 'sudo systemctl restart telegram_bot.service',
-    'run_script': 'sh /path/to/your/script.sh',
-    'check_disk': 'df -h'
-}
 
-def start(update, context):
+@app.on_message(filters.command("start"))
+async def start(client, message):
     keyboard = [
         [InlineKeyboardButton("Heroku Deployment", callback_data='deploy')],
-        [InlineKeyboardButton("Run Telethon Script", callback_data='run_telethon_script')],
+        [InlineKeyboardButton("Run Pyrogram Script", callback_data='run_pyrogram_script')],
         [InlineKeyboardButton("AI", callback_data='ai')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text('Hello! I am your deployment bot. Choose an option:', reply_markup=reply_markup)
+    await message.reply("Hello! I am your deployment bot. Choose an option:", reply_markup=reply_markup)
 
-def button(update, context):
-    query = update.callback_query
-    query.answer()
-    if query.data == 'deploy':
-        context.bot.send_message(chat_id=query.message.chat_id, text="You selected Heroku Deployment. Use /help to see available commands.")
-    elif query.data == 'run_telethon_script':
-        context.bot.send_message(chat_id=query.message.chat_id, text="You selected to run a Telethon script. Use 'dk ai' followed by your request to run the script.")
-    elif query.data == 'ai':
-        context.bot.send_message(chat_id=query.message.chat_id, text="You selected AI. Use 'dk ai' followed by your request to interact with AI.")
+@app.on_callback_query()
+async def button(client, callback_query):
+    if callback_query.data == 'deploy':
+        await callback_query.message.edit("You selected Heroku Deployment. Use /help to see available commands.")
+    elif callback_query.data == 'run_pyrogram_script':
+        await callback_query.message.edit("You selected to run a Pyrogram script. Use 'dk ai' followed by your request to run the script.")
+    elif callback_query.data == 'ai':
+        await callback_query.message.edit("You selected AI. Use 'dk ai' followed by your request to interact with AI.")
 
-def help_command(update, context):
-    update.message.reply_text('/start - Start the bot and see options\n'
-                              '/setheroku <heroku_api_key> - Set your Heroku API key\n'
-                              '/setappname <app_name> - Set a custom name for the Heroku app\n'
-                              '/deploy <repo_url> - Deploy the specified repository to Heroku\n'
-                              '/status - Check the status of the latest deployment\n'
-                              '/logs - Retrieve logs from Heroku\n'
-                              '/exec <command> - Execute a predefined command\n'
-                              '/setopenai <api_key> - Set the OpenAI API key')
+@app.on_message(filters.command("help"))
+async def help_command(client, message):
+    await message.reply('/start - Start the bot and see options\n'
+                        '/setopenai <api_key> - Set the OpenAI API key\n'
+                        '/deploy <repo_url> - Deploy the specified repository to Heroku\n'
+                        '/status - Check the status of the latest deployment\n'
+                        '/logs - Retrieve logs from Heroku\n'
+                        '/exec <command> - Execute a predefined command')
 
-def set_heroku(update, context):
-    user_id = update.message.from_user.id
-    heroku_api_key = context.args[0]
+@app.on_message(filters.command("setopenai") & filters.user(OWNER_ID))
+async def set_openai(client, message):
+    user_id = message.from_user.id
+    openai_api_key = message.text.split(' ', 1)[1]
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {}
+    user_sessions[user_id]['openai_api_key'] = openai_api_key
+    await message.reply('OpenAI API key set.')
+
+@app.on_message(filters.command("setheroku") & filters.user(OWNER_ID))
+async def set_heroku(client, message):
+    user_id = message.from_user.id
+    heroku_api_key = message.text.split(' ', 1)[1]
     if user_id not in user_sessions:
         user_sessions[user_id] = {}
     user_sessions[user_id]['heroku_api_key'] = heroku_api_key
-    update.message.reply_text('Heroku API key set.')
+    await message.reply('Heroku API key set.')
 
-def set_app_name(update, context):
-    user_id = update.message.from_user.id
-    app_name = context.args[0]
+@app.on_message(filters.command("setappname") & filters.user(OWNER_ID))
+async def set_app_name(client, message):
+    user_id = message.from_user.id
+    app_name = message.text.split(' ', 1)[1]
     if user_id not in user_sessions:
-        update.message.reply_text('Please set your Heroku API key first using /setheroku command.')
+        await message.reply('Please set your Heroku API key first using /setheroku command.')
         return
     user_sessions[user_id]['app_name'] = app_name
-    update.message.reply_text(f'Heroku app name set to {app_name}.')
+    await message.reply(f'Heroku app name set to {app_name}.')
 
-def deploy(update, context):
-    user_id = update.message.from_user.id
-    if user_id not in user_sessions or 'heroku_api_key' not in user_sessions[user_id] or 'app_name' not in user_sessions[user_id]:
-        update.message.reply_text('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
+@app.on_message(filters.command("deploy") & filters.user(OWNER_ID))
+async def deploy(client, message):
+    user_id = message.from_user.id
+    repo_url = message.text.split(' ', 1)[1]  # Example: "https://github.com/user/repo"
+    
+    if user_id not in user_sessions:
+        await message.reply('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
         return
 
-    repo_url = context.args[0]  # Example: "https://github.com/user/repo"
-    app_name = user_sessions[user_id]['app_name']
-    heroku_api_key = user_sessions[user_id]['heroku_api_key']
+    app_name = user_sessions[user_id].get('app_name')
+    heroku_api_key = user_sessions[user_id].get('heroku_api_key')
 
-    # Clone the repository
-    subprocess.run(['git', 'clone', repo_url])
-    
-    # Change directory to the repository
-    repo_name = repo_url.split('/')[-1].replace('.git', '')
-    os.chdir(repo_name)
-    
-    # Add and commit any changes (if needed)
-    subprocess.run(['git', 'add', '.'])
-    subprocess.run(['git', 'commit', '-m', 'Deploy via Telegram Bot'])
-    
-    # Authenticate and create Heroku app or set remote if it already exists
-    env = os.environ.copy()
-    env['HEROKU_API_KEY'] = heroku_api_key
-    subprocess.run(['heroku', 'auth:token'], input=heroku_api_key, text=True, env=env)
-    subprocess.run(['heroku', 'create', app_name], env=env)
-    subprocess.run(['heroku', 'git:remote', '-a', app_name], env=env)
-    subprocess.run(['git', 'push', 'heroku', 'master'], env=env)
-    
-    # Go back to the original directory
-    os.chdir('..')
-    
-    update.message.reply_text('Deployment started!')
-
-def check_status(update, context):
-    user_id = update.message.from_user.id
-    if user_id not in user_sessions or 'app_name' not in user_sessions[user_id] or 'heroku_api_key' not in user_sessions[user_id]:
-        update.message.reply_text('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
+    if not app_name or not heroku_api_key:
+        await message.reply('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
         return
 
-    app_name = user_sessions[user_id]['app_name']
-    heroku_api_key = user_sessions[user_id]['heroku_api_key']
-    env = os.environ.copy()
-    env['HEROKU_API_KEY'] = heroku_api_key
+    try:
+        # Clone the repository
+        subprocess.run(['git', 'clone', repo_url])
+        
+        # Change directory to the repository
+        repo_name = repo_url.split('/')[-1].replace('.git', '')
+        os.chdir(repo_name)
+        
+        # Add and commit any changes (if needed)
+        subprocess.run(['git', 'add', '.'])
+        subprocess.run(['git', 'commit', '-m', 'Deploy via Telegram Bot'])
+        
+        # Authenticate and create Heroku app or set remote if it already exists
+        env = os.environ.copy()
+        env['HEROKU_API_KEY'] = heroku_api_key
+        subprocess.run(['heroku', 'auth:token'], input=heroku_api_key, text=True, env=env)
+        subprocess.run(['heroku', 'create', app_name], env=env)
+        subprocess.run(['heroku', 'git:remote', '-a', app_name], env=env)
+        subprocess.run(['git', 'push', 'heroku', 'master'], env=env)
+        
+        # Go back to the original directory
+        os.chdir('..')
+        
+        await message.reply('Deployment started!')
+    except Exception as e:
+        await message.reply(f'Error during deployment: {str(e)}')
 
-    status = subprocess.run(['heroku', 'ps', '-a', app_name], capture_output=True, text=True, env=env)
-    update.message.reply_text(f'Status of {app_name}:\n{status.stdout}')
-
-def get_logs(update, context):
-    user_id = update.message.from_user.id
-    if user_id not in user_sessions or 'app_name' not in user_sessions[user_id] or 'heroku_api_key' not in user_sessions[user_id]:
-        update.message.reply_text('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
-        return
-
-    app_name = user_sessions[user_id]['app_name']
-    heroku_api_key = user_sessions[user_id]['heroku_api_key']
-    env = os.environ.copy()
-    env['HEROKU_API_KEY'] = heroku_api_key
-
-    logs = subprocess.run(['heroku', 'logs', '--tail', '-a', app_name], capture_output=True, text=True, env=env)
-    update.message.reply_text(f'Logs of {app_name}:\n{logs.stdout}')
-
-def exec_command(update, context):
-    user_id = str(update.message.from_user.id)
-    if user_id != OWNER_ID:
-        update.message.reply_text('You do not have permission to use this command.')
-        return
+@app.on_message(filters.command("status") & filters.user(OWNER_ID))
+async def check_status(client, message):
+    user_id = message.from_user.id
     
-    command_key = context.args[0]
-    if command_key in predefined_commands:
-        command = predefined_commands[command_key]
+    if user_id not in user_sessions:
+        await message.reply('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
+        return
+
+    app_name = user_sessions[user_id].get('app_name')
+    heroku_api_key = user_sessions[user_id].get('heroku_api_key')
+
+    if not app_name or not heroku_api_key:
+        await message.reply('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
+        return
+
+    try:
+        env = os.environ.copy()
+        env['HEROKU_API_KEY'] = heroku_api_key
+
+        status = subprocess.run(['heroku', 'ps', '-a', app_name], capture_output=True, text=True, env=env)
+        await message.reply(f'Status of {app_name}:\n{status.stdout}')
+    except Exception as e:
+        await message.reply(f'Error checking status: {str(e)}')
+
+@app.on_message(filters.command("logs") & filters.user(OWNER_ID))
+async def get_logs(client, message):
+    user_id = message.from_user.id
+    
+    if user_id not in user_sessions:
+        await message.reply('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
+        return
+
+    app_name = user_sessions[user_id].get('app_name')
+    heroku_api_key = user_sessions[user_id].get('heroku_api_key')
+
+    if not app_name or not heroku_api_key:
+        await message.reply('Please set your Heroku API key and app name first using /setheroku and /setappname commands.')
+        return
+
+    try:
+        env = os.environ.copy()
+        env['HEROKU_API_KEY'] = heroku_api_key
+
+        logs = subprocess.run(['heroku', 'logs', '--tail', '-a', app_name], capture_output=True, text=True, env=env)
+        await message.reply(f'Logs of {app_name}:\n{logs.stdout}')
+    except Exception as e:
+        await message.reply(f'Error retrieving logs: {str(e)}')
+
+@app.on_message(filters.command("exec") & filters.user(OWNER_ID))
+async def exec_command(client, message):
+    command = message.text.split(' ', 1)[1]
+    try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
-        update.message.reply_text(f'Command executed. Output:\n{result.stdout}')
-    else:
-        update.message.reply_text('Command not found.')
+        await message.reply(f'Command executed. Output:\n{result.stdout}')
+    except Exception as e:
+        await message.reply(f'Error executing command: {str(e)}')
 
-def run_telethon_script(update, context):
-    user_id = str(update.message.from_user.id)
-    if user_id != OWNER_ID:
-        update.message.reply_text('You do not have permission to use this command.')
-        return
-    
-    message = ' '.join(context.args)
-    with telethon_client:
-        telethon_client.loop.run_until_complete(send_telethon_message(message))
-    update.message.reply_text(f'Telethon script executed with message: {message}')
+@app.on_message(filters.text & filters.group)
+async def handle_group_message(client, message):
+    if 'dk ai' in message.text.lower():
+        await handle_ai_request(client, message)
 
-async def send_telethon_message(message):
-    await telethon_client.send_message('me', message)
+@app.on_message(filters.text & filters.private)
+async def handle_private_message(client, message):
+    user_id = message.from_user.id
+    if user_id == OWNER_ID and 'dk ai' in message.text.lower():
+        await handle_ai_request(client, message)
 
-def handle_ai_request(update, context):
-    user_id = update.message.from_user.id
+async def handle_ai_request(client, message):
+    user_id = message.from_user.id
     if user_id not in user_sessions:
         user_sessions[user_id] = {}
     if 'openai_api_key' not in user_sessions[user_id]:
         user_sessions[user_id]['openai_api_key'] = OPENAI_API_KEY
 
     openai.api_key = user_sessions[user_id]['openai_api_key']
-    user_request = update.message.text.replace('dk ai', '').strip()
-    
+    user_request = message.text.replace('dk ai', '').strip()
+
     try:
         if user_request.lower().startswith('image:'):
             description = user_request[len('image:'):].strip()
@@ -207,60 +217,17 @@ def handle_ai_request(update, context):
                 size="512x512"
             )
             image_url = response['data'][0]['url']
-            update.message.reply_text(f'Here is the generated image: {image_url}')
+            await message.reply_photo(image_url)
         else:
             response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": user_request}]
             )
             text = response.choices[0].message['content'].strip()
-            update.message.reply_text(f'AI Response: {text}')
+            await message.reply(f"Deepanshu's assistant: {text}")
     except Exception as e:
-        update.message.reply_text(f'Error: {str(e)}')
-
-def set_openai(update, context):
-    user_id = update.message.from_user.id
-    openai_api_key = context.args[0]
-    if user_id not in user_sessions:
-        user_sessions[user_id] = {}
-    user_sessions[user_id]['openai_api_key'] = openai_api_key
-    update.message.reply_text('OpenAI API key set.')
-
-def handle_message(update, context):
-    if 'dk ai' in update.message.text.lower():
-        handle_ai_request(update, context)
-    else:
-        # Process other commands here if necessary
-        pass
-
-# Add handlers to the dispatcher
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(CommandHandler("help", help_command))
-dispatcher.add_handler(CommandHandler("setheroku", set_heroku, pass_args=True))
-dispatcher.add_handler(CommandHandler("setappname", set_app_name, pass_args=True))
-dispatcher.add_handler(CommandHandler("deploy", deploy, pass_args=True))
-dispatcher.add_handler(CommandHandler("status", check_status))
-dispatcher.add_handler(CommandHandler("logs", get_logs))
-dispatcher.add_handler(CommandHandler("exec", exec_command, pass_args=True))
-dispatcher.add_handler(CommandHandler("runtelethon", run_telethon_script, pass_args=True))
-dispatcher.add_handler(CommandHandler("setopenai", set_openai, pass_args=True))
-dispatcher.add_handler(CallbackQueryHandler(button))
-
-# Add a message handler to handle commands in groups and private chats
-dispatcher.add_handler(MessageHandler(Filters.text & (Filters.chat_type.groups | Filters.chat_type.private), handle_message))
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    update = Update.de_json(request.get_json(), bot)
-    dispatcher.process_update(update)
-    return 'OK'
+        await message.reply(f'Error: {str(e)}')
 
 if __name__ == '__main__':
-    # Start the Flask app in a separate thread
-    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': int(os.environ.get('PORT', 5000))}).start()
-    
-    # Start the Telegram bot
-    updater.start_polling()
-    updater.idle()
-
+    app.run()
 
