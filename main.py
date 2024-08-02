@@ -8,6 +8,7 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
 import openai
+import subprocess
 
 # Load environment variables from .env file
 load_dotenv()
@@ -69,7 +70,7 @@ def button(update, context):
     elif query.data == 'run_telethon_script':
         context.bot.send_message(chat_id=query.message.chat_id, text="You selected to run a Telethon script. Use /runtelethon to run the script.")
     elif query.data == 'ai':
-        context.bot.send_message(chat_id=query.message.chat_id, text="You selected AI. Use /ai <your request> to interact with AI.")
+        context.bot.send_message(chat_id=query.message.chat_id, text="You selected AI. Use 'dk ai' followed by your request to interact with AI.")
 
 def help_command(update, context):
     update.message.reply_text('/start - Start the bot and see options\n'
@@ -80,7 +81,6 @@ def help_command(update, context):
                               '/logs - Retrieve logs from Heroku\n'
                               '/exec <command> - Execute a predefined command\n'
                               '/runtelethon - Run a custom Telethon script\n'
-                              '/ai <your request> - Interact with AI for text or image generation\n'
                               '/setopenai <api_key> - Set the OpenAI API key')
 
 def set_heroku(update, context):
@@ -190,7 +190,7 @@ def run_telethon_script(update, context):
 async def send_telethon_message(message):
     await telethon_client.send_message('me', message)
 
-def ai_command(update, context):
+def handle_ai_request(update, context):
     user_id = update.message.from_user.id
     if user_id not in user_sessions:
         user_sessions[user_id] = {}
@@ -231,7 +231,7 @@ def set_openai(update, context):
 def handle_group_message(update, context):
     user_id = update.message.from_user.id
     if 'dk ai' in update.message.text.lower():
-        ai_command(update, context)
+        handle_ai_request(update, context)
     else:
         message_text = update.message.text
         if message_text.startswith('/'):
@@ -254,8 +254,6 @@ def handle_group_message(update, context):
                 exec_command(update, context)
             elif command == '/runtelethon':
                 run_telethon_script(update, context)
-            elif command == '/ai':
-                ai_command(update, context)
             elif command == '/setopenai':
                 set_openai(update, context)
 
@@ -269,7 +267,6 @@ dispatcher.add_handler(CommandHandler("status", check_status))
 dispatcher.add_handler(CommandHandler("logs", get_logs))
 dispatcher.add_handler(CommandHandler("exec", exec_command, pass_args=True))
 dispatcher.add_handler(CommandHandler("runtelethon", run_telethon_script, pass_args=True))
-dispatcher.add_handler(CommandHandler("ai", ai_command, pass_args=True))
 dispatcher.add_handler(CommandHandler("setopenai", set_openai, pass_args=True))
 dispatcher.add_handler(CallbackQueryHandler(button))
 
