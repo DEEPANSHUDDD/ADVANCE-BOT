@@ -1,1 +1,2 @@
-web: python your_script_name.py
+web: gunicorn -w 4 -b 0.0.0.0:5000 main:app
+
