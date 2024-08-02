@@ -1,5 +1,4 @@
 import os
-import subprocess
 import logging
 from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, Dispatcher, Filters, MessageHandler, Updater
@@ -199,24 +198,27 @@ def ai_command(update, context):
         user_sessions[user_id]['openai_api_key'] = OPENAI_API_KEY
 
     openai.api_key = user_sessions[user_id]['openai_api_key']
-    user_request = ' '.join(context.args)
+    user_request = update.message.text.replace('dk ai', '').strip()
     
-    if user_request.startswith('image:'):
-        description = user_request[len('image:'):].strip()
-        response = openai.Image.create(
-            prompt=description,
-            n=1,
-            size="512x512"
-        )
-        image_url = response['data'][0]['url']
-        update.message.reply_text(f'Here is the generated image: {image_url}')
-    else:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": user_request}]
-        )
-        text = response.choices[0].message['content'].strip()
-        update.message.reply_text(f'AI Response: {text}')
+    try:
+        if user_request.lower().startswith('image:'):
+            description = user_request[len('image:'):].strip()
+            response = openai.Image.create(
+                prompt=description,
+                n=1,
+                size="512x512"
+            )
+            image_url = response['data'][0]['url']
+            update.message.reply_text(f'Here is the generated image: {image_url}')
+        else:
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": user_request}]
+            )
+            text = response['choices'][0]['message']['content'].strip()
+            update.message.reply_text(f'AI Response: {text}')
+    except Exception as e:
+        update.message.reply_text(f'Error: {str(e)}')
 
 def set_openai(update, context):
     user_id = update.message.from_user.id
@@ -227,31 +229,35 @@ def set_openai(update, context):
     update.message.reply_text('OpenAI API key set.')
 
 def handle_group_message(update, context):
-    message_text = update.message.text
-    if message_text.startswith('/'):
-        command = message_text.split(' ')[0]
-        if command == '/start':
-            start(update, context)
-        elif command == '/help':
-            help_command(update, context)
-        elif command == '/setheroku':
-            set_heroku(update, context)
-        elif command == '/setappname':
-            set_app_name(update, context)
-        elif command == '/deploy':
-            deploy(update, context)
-        elif command == '/status':
-            check_status(update, context)
-        elif command == '/logs':
-            get_logs(update, context)
-        elif command == '/exec':
-            exec_command(update, context)
-        elif command == '/runtelethon':
-            run_telethon_script(update, context)
-        elif command == '/ai':
-            ai_command(update, context)
-        elif command == '/setopenai':
-            set_openai(update, context)
+    user_id = update.message.from_user.id
+    if 'dk ai' in update.message.text.lower():
+        ai_command(update, context)
+    else:
+        message_text = update.message.text
+        if message_text.startswith('/'):
+            command = message_text.split(' ')[0]
+            if command == '/start':
+                start(update, context)
+            elif command == '/help':
+                help_command(update, context)
+            elif command == '/setheroku':
+                set_heroku(update, context)
+            elif command == '/setappname':
+                set_app_name(update, context)
+            elif command == '/deploy':
+                deploy(update, context)
+            elif command == '/status':
+                check_status(update, context)
+            elif command == '/logs':
+                get_logs(update, context)
+            elif command == '/exec':
+                exec_command(update, context)
+            elif command == '/runtelethon':
+                run_telethon_script(update, context)
+            elif command == '/ai':
+                ai_command(update, context)
+            elif command == '/setopenai':
+                set_openai(update, context)
 
 # Add handlers to the dispatcher
 dispatcher.add_handler(CommandHandler("start", start))
