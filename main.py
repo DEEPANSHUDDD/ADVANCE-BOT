@@ -190,9 +190,9 @@ async def exec_command(client, message):
     command = message.text.split(' ', 1)[1]
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
-await message.reply(f'Command executed. Output:\n{result.stdout}')
-except Exception as e:
-    await message.reply(f'Error executing command: {str(e)}')
+        await message.reply(f'Command executed. Output:\n{result.stdout}')
+    except Exception as e:
+        await message.reply(f'Error executing command: {str(e)}')
 
 @app.on_message(filters.text & (filters.group | filters.private))
 async def handle_message(client, message):
