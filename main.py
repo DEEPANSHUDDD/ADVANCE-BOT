@@ -10,7 +10,7 @@ load_dotenv()
 
 # Access the bot token, OpenAI API key, and other credentials from environment variables
 API_ID = int(os.getenv('API_ID'))
-API_HASH = os.getenv('API_HASH'))
+API_HASH = os.getenv('API_HASH')
 BOT_TOKEN = os.getenv('TOKEN')
 OWNER_ID = int(os.getenv('OWNER_ID'))
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -35,7 +35,8 @@ async def start(client, message):
     keyboard = [
         [InlineKeyboardButton("Heroku Deployment", callback_data='deploy')],
         [InlineKeyboardButton("Run Pyrogram Script", callback_data='run_pyrogram_script')],
-        [InlineKeyboardButton("AI", callback_data='ai')]
+        [InlineKeyboardButton("AI", callback_data='ai')],
+        [InlineKeyboardButton("GitHub", callback_data='github')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await message.reply("Hello! I am your deployment bot. Choose an option:", reply_markup=reply_markup)
@@ -48,6 +49,8 @@ async def button(client, callback_query):
         await callback_query.message.edit("You selected to run a Pyrogram script. Use 'dk ai' followed by your request to run the script.")
     elif callback_query.data == 'ai':
         await callback_query.message.edit("You selected AI. Use 'dk ai' followed by your request to interact with AI.")
+    elif callback_query.data == 'github':
+        await callback_query.message.edit("You selected GitHub. Use the available GitHub commands to interact with GitHub.")
 
 @app.on_message(filters.command("help"))
 async def help_command(client, message):
@@ -57,7 +60,8 @@ async def help_command(client, message):
                         '/status - Check the status of the latest deployment\n'
                         '/logs - Retrieve logs from Heroku\n'
                         '/exec <command> - Execute a predefined command\n'
-                        '/ai <query> - Interact with GPT-4 and generate images using OpenAI')
+                        '/ai <query> - Interact with GPT-4 and generate images using OpenAI\n'
+                        '/github - Interact with GitHub (Use /github_help for GitHub commands)')
 
 @app.on_message(filters.command("setopenai") & filters.user(OWNER_ID))
 async def set_openai(client, message):
