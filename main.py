@@ -1,4 +1,3 @@
-
 import os
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -11,7 +10,7 @@ load_dotenv()
 
 # Access the bot token, OpenAI API key, and other credentials from environment variables
 API_ID = int(os.getenv('API_ID'))
-API_HASH = os.getenv('API_HASH')
+API_HASH = os.getenv('API_HASH'))
 BOT_TOKEN = os.getenv('TOKEN')
 OWNER_ID = int(os.getenv('OWNER_ID'))
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -57,7 +56,8 @@ async def help_command(client, message):
                         '/deploy <repo_url> - Deploy the specified repository to Heroku\n'
                         '/status - Check the status of the latest deployment\n'
                         '/logs - Retrieve logs from Heroku\n'
-                        '/exec <command> - Execute a predefined command')
+                        '/exec <command> - Execute a predefined command\n'
+                        '/ai <query> - Interact with GPT-4 and generate images using OpenAI')
 
 @app.on_message(filters.command("setopenai") & filters.user(OWNER_ID))
 async def set_openai(client, message):
@@ -66,6 +66,7 @@ async def set_openai(client, message):
     if user_id not in user_sessions:
         user_sessions[user_id] = {}
     user_sessions[user_id]['openai_api_key'] = openai_api_key
+    openai.api_key = openai_api_key  # Update the API key for current requests
     await message.reply('OpenAI API key set.')
 
 @app.on_message(filters.command("setheroku") & filters.user(OWNER_ID))
@@ -187,13 +188,8 @@ async def exec_command(client, message):
     except Exception as e:
         await message.reply(f'Error executing command: {str(e)}')
 
-@app.on_message(filters.text & filters.group)
-async def handle_group_message(client, message):
-    if 'dk ai' in message.text.lower():
-        await handle_ai_request(client, message)
-
-@app.on_message(filters.text & filters.private)
-async def handle_private_message(client, message):
+@app.on_message(filters.text & (filters.group | filters.private))
+async def handle_message(client, message):
     user_id = message.from_user.id
     if user_id == OWNER_ID and 'dk ai' in message.text.lower():
         await handle_ai_request(client, message)
@@ -230,4 +226,3 @@ async def handle_ai_request(client, message):
 
 if __name__ == '__main__':
     app.run()
-
