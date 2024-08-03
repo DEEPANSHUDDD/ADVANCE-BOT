@@ -4,3 +4,4 @@ gunicorn
 telethon
 python-dotenv
 openai
+requests
